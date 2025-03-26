@@ -1,9 +1,11 @@
 from loguru import logger
 from sqlalchemy import Integer, and_, cast, func, select
+# joinedload подходит для one2one many2one загрузки, не подходит для one2many
 from sqlalchemy.orm import joinedload, selectinload
+# selectinload подходит для one2many и many2many
 from database import async_session_maker, async_engine, Base
-from models import Workers, Resumes, Workload
-from schemas import WorkersRelDTO
+from models import Workers, Resumes, Workload, Vacancies
+from schemas import ResumesRelVacanciesRepliedWithoutVacancyCompensationDTO, WorkersRelDTO
 
 class AsyncORM:
     @staticmethod
@@ -182,6 +184,36 @@ class AsyncORM:
             return result_dto
 
 
+    @staticmethod
+    async def add_vacancies_and_replies():
+        async with async_session_maker() as session:
+            new_vacancy = Vacancies(title="Python разработчик", compensation=100000)
+            session.add(new_vacancy)
+            get_resume_1 = select(Resumes).options(selectinload(Resumes.vacancies_replied)).filter_by(id=1)
+            get_resume_2 = select(Resumes).options(selectinload(Resumes.vacancies_replied)).filter_by(id=2)
+            resume_1 = (await session.execute(get_resume_1)).scalar_one()
+            resume_2 = (await session.execute(get_resume_2)).scalar_one()
+            # Устанавливаем связи
+            resume_1.vacancies_replied.append(new_vacancy)
+            resume_2.vacancies_replied.append(new_vacancy)
+            await session.commit()
+            logger.success('Data vacancies_and_replies inserted successfully!')
+
+
+    @staticmethod
+    async def select_resumes_with_all_relationships():
+        async with async_session_maker() as session:
+            query = (
+                select(Resumes)
+                .options(joinedload(Resumes.worker))
+                .options(selectinload(Resumes.vacancies_replied).load_only(Vacancies.title)) # load_only подгружает только опр. столбцы, а не все
+            )
+            res = await session.execute(query)
+            result_orm = res.unique().scalars().all() # в joinedload нужен uniq 
+            print(f"{result_orm=}")
+            result_dto = [ResumesRelVacanciesRepliedWithoutVacancyCompensationDTO.model_validate(row, from_attributes=True) for row in result_orm]
+            print(f"{result_dto=}")
+            return result_dto
 
 
 '''

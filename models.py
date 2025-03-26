@@ -12,13 +12,6 @@ updated_at = Annotated[datetime, mapped_column(
         onupdate=datetime.now
     )]
 
-
-class Workload(enum.Enum):
-    parttime = "parttime"
-    fulltime = "fulltime"
-
-
-
 class Workers(Base):
     __tablename__ = "workers"
 
@@ -36,7 +29,9 @@ class Workers(Base):
         overlaps="resumes",
     )
 
-
+class Workload(enum.Enum):
+    parttime = "parttime"
+    fulltime = "fulltime"
 
 class Resumes(Base):
     __tablename__ = "resumes"
@@ -54,15 +49,47 @@ class Resumes(Base):
         back_populates="resumes",   
     )
 
+    #many2many
+    vacancies_replied: Mapped[list["Vacancies"]]= relationship(
+        back_populates="resumes_replied",
+        secondary="vacancies_replies", # название таблицы, через которую связы вакансии и резюме
+
+    )
+
     repr_cols_num = 4 # выведем первые 4 колонки
     repr_cols = ("created_at",) # и дополнительно created_at
 
     __table_args__ = (
-    Index("title_index", "title"),
-    CheckConstraint("compensation > 0", name="checl_compensation_positive"),
+        Index("title_index", "title"),
+        CheckConstraint("compensation > 0", name="check_compensation_positive"),
     )
 
 
 
+class Vacancies(Base):
+    __tablename__ = "vacancies"
 
+    id: Mapped[intpk]
+    title: Mapped[str_256]
+    compensation: Mapped[int | None]
 
+    resumes_replied: Mapped[list["Resumes"]] = relationship(
+        back_populates="vacancies_replied",
+        secondary="vacancies_replies", # название таблицы, через которую связы вакансии и резюме
+    )
+
+class VacanciesReplies(Base):
+    __tablename__ = "vacancies_replies"
+
+    resume_id: Mapped[int] = mapped_column(
+        ForeignKey("resumes.id", ondelete="CASCADE"),
+        primary_key=True,
+        
+    )
+    vacancy_id: Mapped[int] = mapped_column(
+        ForeignKey("vacancies.id", ondelete="CASCADE"),
+        primary_key=True,
+        
+    )
+
+    cover_letter: Mapped[str | None]
